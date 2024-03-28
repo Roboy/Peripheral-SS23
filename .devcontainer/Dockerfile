@@ -75,15 +75,21 @@ RUN apt-get update \
     software-properties-common \
  && rm -rf /var/lib/apt/lists/*
 # The following steps are based on: https://github.com/IntelRealSense/realsense-ros/tree/ros2-development
-ENV WS_DIR="/ros2_ws"
-WORKDIR ${WS_DIR}
+# ENV WS_DIR="/ros2_ws"
+# WORKDIR ${WS_DIR}
 RUN apt-get update -y \
  && apt-get install -y \
-    ros-${ROS_DISTRO}-rviz2 \
- && mkdir src
-COPY docker/realsense-ros ./src
-COPY docker/multi_camera_launch.py /ros2_ws/src/realsense2_camera/launch
-COPY docker/depth_handler /ros2_ws/src/depth_handler
+    ros-${ROS_DISTRO}-rviz2
+#  && mkdir src
+
+RUN sudo apt-get install ros-humble-rmw-cyclonedds-cpp -y
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+RUN sudo apt-get install ros-humble-image-transport-plugins -y
+
+# COPY docker/realsense-ros ./src
+# COPY docker/multi_camera_launch.py /ros2_ws/src/realsense2_camera/launch
+# COPY docker/depth_handler /ros2_ws/src/depth_handler
+# COPY docker/proximity_monitor /ros2_ws/src/proximity_monitor
 RUN apt-get install -y python3-rosdep \
  && apt-get update \
  && source /opt/ros/${ROS_DISTRO}/setup.bash \
@@ -93,8 +99,23 @@ RUN apt-get install -y python3-rosdep \
  && rosdep install -i --from-path src --rosdistro ${ROS_DISTRO} --skip-keys=librealsense2 -y \
  && colcon build
 RUN sudo apt-get install python3-opencv
-RUN echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
-COPY docker/launch.sh .
-RUN chmod +x /ros2_ws/launch.sh
+# RUN echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
+# COPY docker/launch.sh .
+
+ARG USERNAME=ros
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+# Create a non-root user
+RUN groupadd --gid $USER_GID $USERNAME \
+  && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
+  # Add sudo support for the non-root user
+  && apt-get update \
+  && apt-get install -y sudo \
+  && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME\
+  && chmod 0440 /etc/sudoers.d/$USERNAME \
+  && rm -rf /var/lib/apt/lists/*
+
+# RUN chmod +x /ros2_ws/launch.sh
 ENV DEBIAN_FRONTEND=dialog
-ENTRYPOINT ["/ros2_ws/launch.sh"]
+# ENTRYPOINT ["/ros2_ws/launch.sh"]

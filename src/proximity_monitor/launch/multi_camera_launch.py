@@ -22,20 +22,18 @@
 # ros2 launch realsense2_camera rs_multi_camera_launch.py camera_name1:=D400 device_type2:=l5. device_type1:=d4..
 
 """Launch realsense2_camera node."""
+import os
 import copy
 from launch import LaunchDescription
 import launch_ros.actions
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, ThisLaunchFileDir
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from ament_index_python.packages import get_package_share_directory
 import sys
 import pathlib
 sys.path.append(str(pathlib.Path(__file__).parent.absolute()))
-import rs_launch
 
-local_parameters = [{'name': 'camera_name1', 'default': 'camera_back', 'description': 'camera unique name'},
-                    {'name': 'camera_name2', 'default': 'camera2', 'description': 'camera unique name'},
-                   ]
 
 def set_configurable_parameters(local_params):
     return dict([(param['original_name'], LaunchConfiguration(param['name'])) for param in local_params])
@@ -47,31 +45,53 @@ def duplicate_params(general_params, posix):
         param['name'] += posix
     return local_params
     
-
 def generate_launch_description():
-    params1 = duplicate_params(rs_launch.configurable_parameters, '1')
-    params2 = duplicate_params(rs_launch.configurable_parameters, '2')
-    return LaunchDescription(
-        rs_launch.declare_configurable_parameters(local_parameters) +
-        rs_launch.declare_configurable_parameters(params1) + 
-        rs_launch.declare_configurable_parameters(params2) + 
-        [
+    realsense_launch_file = os.path.join(
+        get_package_share_directory('realsense2_camera'),
+        'launch',
+        'rs_launch.py'
+    )
+
+    return LaunchDescription([
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([ThisLaunchFileDir(), '/rs_launch.py']),
-            launch_arguments={'camera_name': 'camera_shoulder_left', "serial_no":"_829212071824"}.items(),
+            PythonLaunchDescriptionSource(realsense_launch_file),
+            launch_arguments={
+                'camera_name': 'camera_back_top', 
+                "serial_no":"_829212071824",
+                'depth_module.profile': '424x240x6',
+                'rgb_camera.profile': '320x240x6',
+            }.items(),
         ),
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([ThisLaunchFileDir(), '/rs_launch.py']),
-            launch_arguments={'camera_name': 'camera_back', "serial_no":"_829212071844", "pointcloud.enable":"false"}.items(),
+            PythonLaunchDescriptionSource(realsense_launch_file),
+            launch_arguments={
+                'camera_name': 'camera_back_bottom', 
+                "serial_no":"_829212071844",
+                'depth_module.profile': '424x240x6 ',
+                'rgb_camera.profile': '320x240x6',}.items(),
         ),
+        # launch_ros.actions.Node(
+        #     package = "depth_handler",
+        #     executable = "depth_subscriber"
+        # ),
+        # launch_ros.actions.Node(
+        #     package = "depth_handler",
+        #     executable = "pcd_subscriber",
+        #     name = 'pointcloud_shoulder_left',
+        #     parameters = [{'camera_side': 'left'}]
+        # ),
         launch_ros.actions.Node(
-            package = "depth_handler",
-            executable = "depth_subscriber"
+            package = "proximity_monitor",
+            executable = "proximity_monitor",
+            name = 'proximity_monitor_top',
+            parameters = [{'camera_name': 'camera_back_top'},
+                          {'proximity_warning_threshold': 0.2}]
         ),
-        launch_ros.actions.Node(
-            package = "depth_handler",
-            executable = "pcd_subscriber",
-            name = 'pointcloud_shoulder_left',
-            parameters = [{'camera_side': 'left'}]
+        launch_ros.actions.Node (
+            package = "proximity_monitor",
+            executable = "proximity_monitor",
+            name = 'proximity_monitor_bottom',
+            parameters = [{'camera_name': 'camera_back_bottom'},
+                          {'proximity_warning_threshold': 0.2}]
         ),
     ])
